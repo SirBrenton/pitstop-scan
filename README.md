@@ -14,9 +14,9 @@ Pitstop Scan turns that into a ranked list of **failure + breach signatures** yo
 
 ## What this is (plain English)
 You point Pitstop Scan at a JSONL “exhaust” file (**one tool-call event per line**).
-It groups events into **signatures** (tool/op + coarse context buckets) and surfaces what’s hurting most.
+It groups events by **tool + operation + coarse context** and surfaces what’s hurting most.
 
-**It ends with concrete next steps:** deadline guidance, retry caps, 429 backoff+jitter, and "never retry boundaries (e.g., 401)".
+**It ends with concrete next steps:** deadline guidance, retry caps, 429 backoff+jitter, and **never-retry boundaries** (e.g., 401 / auth failures).
 
 ## What you get
 Running the scan writes:
@@ -32,7 +32,7 @@ Running the scan writes:
 ## Privacy / safety (hard boundary)
 - **Local-only by default.** No data leaves your machine.
 - Input is **event metadata**, not prompts or payload bodies.
-- **Should NOT be present:** prompts, request/response bodies, headers, tokens, customer content.
+- **Must NOT be present:** prompts, request/response bodies, headers, tokens, customer content.
 - Outputs are **derived summaries only** (no raw requests/responses).
 
 ## Quickstart (5 minutes)
