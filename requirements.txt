@@ -1,0 +1,2 @@
+# Pitstop Scan MVP
+jsonschema>=4.0.0
