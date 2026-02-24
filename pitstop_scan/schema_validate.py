@@ -1,3 +1,4 @@
+# pitstop_scan/schema_validate.py
 from __future__ import annotations
 
 import json
@@ -33,6 +34,7 @@ def iter_jsonl(path: str | Path) -> Iterable[Tuple[int, Dict[str, Any]]]:
 
 
 def validate_against_schema(obj: Dict[str, Any], *, schema: Dict[str, Any], line_no: int) -> None:
+    # NOTE: build validator once per call; ok for MVP. (Can optimize later.)
     validator = jsonschema.Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(obj), key=lambda e: list(e.path))
     if errors:
