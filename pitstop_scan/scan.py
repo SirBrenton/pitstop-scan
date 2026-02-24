@@ -4,13 +4,11 @@ import csv
 import json
 import statistics
 import zipfile
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-from .contracts import validate_event
 from .report import render_report
-
+from .schema_validate import load_schema, validate_against_schema
 
 def percentile(sorted_vals: List[float], p: float) -> float:
     if not sorted_vals:
@@ -29,7 +27,10 @@ def percentile(sorted_vals: List[float], p: float) -> float:
     return float(d0 + d1)
 
 
-def load_events(path: Path) -> List[Dict[str, Any]]:
+def load_events(path: Path, *, schema_path: Path) -> List[Dict[str, Any]]:
+    # Validate each JSONL line against the canonical receipt schema.
+    # This replaces the old ad-hoc "contracts.validate_event" shape checks.
+    schema = load_schema(schema_path)
     events: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as f:
         for i, line in enumerate(f, start=1):
@@ -40,37 +41,43 @@ def load_events(path: Path) -> List[Dict[str, Any]]:
                 obj = json.loads(line)
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON on line {i}: {e}") from e
-            validate_event(obj, line_no=i)
+            validate_against_schema(obj, schema=schema, line_no=i)
             events.append(obj)
     return events
 
 
 def _sig_key(e: Dict[str, Any]) -> Tuple[str, str, str, str, str, str]:
     """
-    Signature = tool/op + coarse buckets.
+    Signature = tool/operation + coarse buckets.
     Missing buckets become "na".
     """
-    tool = str(e.get("tool", "na"))
-    op = str(e.get("op", "na"))
-    env = str(e.get("env", "na"))
-    region = str(e.get("region", "na"))
-    conc = str(e.get("concurrency_bucket", "na"))
-    tier = str(e.get("tier", "na"))
+    tool = str(e.get("tool_id", "na"))
+    op = str(e.get("operation", "na"))
+
+    ctx = e.get("context_signature") or {}
+    # allow either nested buckets or top-level buckets
+    env = str(ctx.get("env_bucket") or e.get("env_bucket") or "na")
+    region = str(ctx.get("region_bucket") or e.get("region_bucket") or "na")
+    conc = str(ctx.get("concurrency_bucket") or e.get("concurrency_bucket") or "na")
+    tier = str(ctx.get("tenant_tier") or e.get("tenant_tier") or "na")
+
     return (tool, op, env, region, conc, tier)
 
 
 def _is_ok(e: Dict[str, Any]) -> bool:
-    return e.get("status") == "ok"
+    out = e.get("outcome") or {}
+    return out.get("status") == "ok"
 
 
 def _is_breach(e: Dict[str, Any]) -> bool:
-    b = e.get("budget_ms")
+    b = (e.get("budget") or {}).get("deadline_ms")
     if b is None:
         return False
-    return float(e["latency_ms"]) > float(b)
+    cost = e.get("cost") or {}
+    return float(cost.get("latency_ms", 0.0)) > float(b)
 
 def _is_budgeted(e: Dict[str, Any]) -> bool:
-    return e.get("budget_ms") is not None
+    return (e.get("budget") or {}).get("deadline_ms") is not None
 
 def _pain_score(count: int, fail_count: int, breach_count: int, p95_ms: float) -> float:
     """
@@ -89,8 +96,8 @@ def compute_signature_rollups(events: List[Dict[str, Any]]) -> List[Dict[str, An
 
     rollups: List[Dict[str, Any]] = []
     for key, evs in groups.items():
-        lat = sorted(float(e["latency_ms"]) for e in evs)
-        retries = [float(e.get("retries", 0)) for e in evs]
+        lat = sorted(float((e.get("cost") or {}).get("latency_ms", 0.0)) for e in evs)
+        retries = [float((e.get("cost") or {}).get("retries", 0)) for e in evs]
         ok_count = sum(1 for e in evs if _is_ok(e))
         fail_count = len(evs) - ok_count
         budgeted_count = sum(1 for e in evs if _is_budgeted(e))
@@ -101,7 +108,8 @@ def compute_signature_rollups(events: List[Dict[str, Any]]) -> List[Dict[str, An
         for e in evs:
             if _is_ok(e):
                 continue
-            ec = e.get("error_class") or "unknown"
+            out = e.get("outcome") or {}
+            ec = out.get("error_class") or "unknown"
             err_counts[str(ec)] = err_counts.get(str(ec), 0) + 1
 
         tool, op, env, region, conc, tier = key
@@ -212,13 +220,15 @@ def write_pack(out_dir: Path) -> Path:
 def run_scan(in_path: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    events = load_events(in_path)
+    # Canonical receipt schema lives in-repo (copied from commons for now).
+    schema_path = Path(__file__).resolve().parents[1] / "schemas" / "decision_event.v1.schema.json"
+    events = load_events(in_path, schema_path=schema_path)
 
-    latencies = [float(e["latency_ms"]) for e in events]
+    latencies = [float((e.get("cost") or {}).get("latency_ms", 0.0)) for e in events]
     lat_sorted = sorted(latencies)
 
-    ok = [e for e in events if e.get("status") == "ok"]
-    fails = [e for e in events if e.get("status") != "ok"]
+    ok = [e for e in events if _is_ok(e)]
+    fails = [e for e in events if not _is_ok(e)]
 
     budgeted = [e for e in events if _is_budgeted(e)]
     breaches = [e for e in events if _is_breach(e)]
@@ -255,7 +265,7 @@ def run_scan(in_path: Path, out_dir: Path) -> None:
         "ok_rate": (len(ok) / len(events)) if events else 0.0,
         "budgeted_events": len(budgeted),
         "breach_rate": (len(breaches) / len(budgeted)) if budgeted else 0.0,
-        "retries_mean": statistics.mean([float(e.get("retries", 0)) for e in events]) if events else 0.0,
+        "retries_mean": statistics.mean([float((e.get("cost") or {}).get("retries", 0)) for e in events]) if events else 0.0,
         "latency_ms": {
             "mean": statistics.mean(latencies) if latencies else 0.0,
             "p50": percentile(lat_sorted, 50),
