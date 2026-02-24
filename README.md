@@ -4,6 +4,24 @@ Local-first reliability triage for AI tool/workflow calls.
 
 **One-liner:** Run Pitstop Scan on your tool-call logs and it tells you **which calls are blowing retries / breaching latency budgets** — and **what to cap next** (timeouts, retries, 429 backoff, auth handling).
 
+## Execution Contract (v1.0)
+
+Pitstop Scan is powered by the **Pitstop Execution Contract**:
+
+> `execute(intent, budget, policy) -> result + receipt`
+
+This contract standardizes:
+- budget semantics (deadlines, max elapsed, retry caps)
+- classification taxonomy (429 vs 402 vs timeout vs auth)
+- routing scope (model vs provider vs credential)
+- audit-grade receipts for hazard ranking
+
+Read the canonical spec here:
+
+→ **[Execution Contract v1.0](./EXECUTION_CONTRACT.md)**
+
+If you maintain AI agents, API gateways, or tool routers, this contract defines the correctness rules behind reliable execution.
+
 ## Why you’d run this
 If you’ve ever said:
 - “We don’t know which tool calls are killing latency.”
