@@ -1,57 +1,85 @@
 # Pitstop Scan
 
-Local-first reliability triage for AI tool/workflow calls.
+Local-first reliability triage for **AI + API execution**.
 
-**One-liner:** Run Pitstop Scan on your tool-call logs and it tells you **which calls are blowing retries / breaching latency budgets** — and **what to cap next** (timeouts, retries, 429 backoff, auth handling).
+**True North:** We make AI + API execution predictable: **budgets, routing, enforcement, receipts**.
 
-## Execution Contract (v1.0)
+**Status:** Contract v1.0 shipped. Scan produces hazard packs from receipts.
 
-Pitstop Scan is powered by the **Pitstop Execution Contract**:
+## The Execution Contract (v1.0)
 
-> `execute(intent, budget, policy) -> result + receipt`
+Pitstop Scan is a **reference implementation** of the Pitstop Execution Contract:
 
-This contract standardizes:
-- budget semantics (deadlines, max elapsed, retry caps)
-- classification taxonomy (429 vs 402 vs timeout vs auth)
-- routing scope (model vs provider vs credential)
-- audit-grade receipts for hazard ranking
+> `execute(intent, budget, policy) -> result, receipt`
 
-Read the canonical spec here:
+The contract defines the correctness rules for reliable execution:
+- **Budget semantics:** per-attempt deadlines, max elapsed, retry caps (attempts include fallbacks)
+- **Classification taxonomy:** 429 vs 402 vs timeout vs auth (retryable vs terminal)
+- **Scope correctness:** model vs provider vs credential (cooldown blast radius)
+- **Audit-grade receipts:** emitted on every attempt (including block/cooldown/preemption)
 
-→ **[Execution Contract v1.0](./EXECUTION_CONTRACT.md)**
+Read the spec:
 
-If you maintain AI agents, API gateways, or tool routers, this contract defines the correctness rules behind reliable execution.
+→ **[EXECUTION_CONTRACT.md](./EXECUTION_CONTRACT.md)**
+
+**What Scan does:** given contract-compliant receipts, it outputs a ranked hazard pack — **what’s hurting most** and **what to cap next**.
+
+---
 
 ## Why you’d run this
+
 If you’ve ever said:
-- “We don’t know which tool calls are killing latency.”
+- “We don’t know which calls are killing tail latency.”
 - “Retries are spiking / rate limits are killing us.”
 - “It usually works… but the tail is brutal.”
 
 Pitstop Scan turns that into a ranked list of **failure + breach signatures** you can actually fix.
 
-## What this is (plain English)
-You point Pitstop Scan at a JSONL “exhaust” file (**one tool-call event per line**).
-It groups events by **tool + operation + coarse context** and surfaces what’s hurting most.
+---
 
-**It ends with concrete next steps:** deadline guidance, retry caps, 429 backoff+jitter, and **never-retry boundaries** (e.g., 401 / auth failures).
+## What this is (plain English)
+
+You point Pitstop Scan at a JSONL “exhaust” file (**one receipt per line**).
+It groups receipts by **tool + operation + normalized endpoint + coarse context** and surfaces where:
+- **latency breaches** concentrate (success can still be a breach), and/or
+- **failures** concentrate (timeouts, 429s, auth, 5xx)
+
+It ends with concrete guardrails to implement first:
+- budget-aligned deadlines
+- retry caps + max elapsed bounds
+- 429 backoff (+ respect Retry-After)
+- never-retry boundaries (401/403/402)
+
+---
 
 ## What you get
+
 Running the scan writes:
 
-- `output/report.md` — 1-page summary: what’s hurting + what to do next
-- `output/hazards.csv` — ranked hazards (what’s hurting + why)
+- `output/report.md` — 1-page reliability snapshot + top-2 fixes
+- `output/hazards.csv` — ranked hazards (highest leverage first)
 - `output/signatures.csv` — per-signature rollups
-- `output/summary.json` — machine totals (for automation)
+- `output/summary.json` — machine totals (automation-friendly)
 - `output/pitstop_pack_agg.zip` — zip of the four derived outputs above
 
-**Breach** = latency exceeds `budget_ms` **even if status is `ok`**.
+**Breach** = latency exceeds the per-attempt deadline (`budget.deadline_ms`) **even if status is `ok`**.  
+(If receipts use legacy `budget_ms`, Scan treats it as `budget.deadline_ms`.)
+
+---
 
 ## Privacy / safety (hard boundary)
+
 - **Local-only by default.** No data leaves your machine.
-- Input is **event metadata**, not prompts or payload bodies.
-- **Must NOT be present:** prompts, request/response bodies, headers, tokens, customer content.
-- Outputs are **derived summaries only** (no raw requests/responses).
+- Input should be **operational receipts**, not payloads.
+
+Receipts **MUST NOT** include:
+- prompts, message content, tool payload bodies, response bodies
+- headers, tokens, API keys, cookies
+- raw URLs or query strings (use `endpoint_norm`)
+
+Outputs are **derived summaries only** (no raw requests/responses).
+
+---
 
 ## Quickstart (5 minutes)
 
@@ -78,8 +106,8 @@ less output/report.md
 # macOS convenience:
 open output/report.md
 ```
-### Don’t have exhaust yet?
-Run a synthetic demo (creates a tiny sample input/exhaust.jsonl):
+### Don’t have receipts yet?
+Run a synthetic demo (creates a tiny input/exhaust.jsonl):
 ```bash
 make demo
 open output/report.md
@@ -88,29 +116,37 @@ If `make demo works`, you’re ready — replace `input/exhaust.jsonl` with your
 
 ## Input contract (minimum viable)
 
-Each JSONL line should include:
-- tool, op
-- coarse context buckets (e.g. env, region, concurrency_bucket, tier)
-- outcome: status (ok/error) and/or error_class
-- latency_ms
-- retries
-- budget_ms (recommended)
+Each JSONL line should include (aligned to the Execution Contract):
 
-That’s it.
+**Required:**
+
+- target: `tool_id`, `operation`, `endpoint_norm`
+- outcome: `outcome.status` and (if fail) `outcome.error_class` (optionally `outcome.http_status`)
+- timing: `cost.latency_ms`
+- budget: `budget.deadline_ms` (or `legacy budget_ms`)
+- attempt identity: `execution_id`, `attempt_id`
+
+**Recommended (improves ranking + fix guidance):**
+
+- `budget.max_elapsed_ms`
+- `budget.retry_budget`
+- `decision.action`
+
+That’s enough to rank hazards and generate the pack.
 
 ## Notes on “loss” and cost framing
 
 The report may include a priced loss model to help rank fixes.
-Treat it as tunable (knobs are shown). The primary truth signals are breach rate and tail latency (p95/p99).
+Treat it as tunable. The primary truth signals are breach rate and tail latency (p95/p99).
 
-## Optional: 48-hour Patch Plan (human + copy/paste guardrails)
+## 48-hour Patch Plan (human + copy/paste guardrails)
 
-If you want an exact enforcement plan (timeouts, retry caps, 429 backoff+jitter rules, and where to enforce them), send:
+If you want a short, targeted enforcement plan mapped to your top hazards, send:
 
 - `output/pitstop_pack_agg.zip` (or the four derived files)
 
-**What you send:** report.md, hazards.csv, signatures.csv, summary.json (derived outputs only).
+**What you send:** `report.md`, `hazards.csv`, `signatures.csv`, `summary.json` (derived outputs only).
 
 **What you do NOT send:** raw exhaust, prompts, payloads, headers, tokens.
 
-**What you get back:** a 1-page Patch Plan with exact guardrails (deadlines, retry caps, 429 rules) mapped to your top signatures.
+**What you get back:** a 1-page “Correctness Findings + Fix Order” doc (deadlines, retry caps, 429 handling, cooldown scoping).
