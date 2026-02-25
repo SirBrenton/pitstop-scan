@@ -33,21 +33,40 @@
       letter-spacing: -0.02em;
     }
 
+    .quote {
+      margin: 0 0 18px 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: #111;
+    }
+
     .subhead {
-      margin: 0 0 22px 0;
+      margin: 0 0 14px 0;
       font-size: 18px;
       color: #333;
     }
 
+    .lede {
+      margin: 0 0 18px 0;
+      font-size: 16px;
+      color: #444;
+    }
+
     ul {
-      margin: 0 0 22px 18px;
+      margin: 0 0 22px 40px;
       padding: 0;
     }
 
-    li { margin: 6px 0; }
+    li { margin: 8px 0; }
+
+    hr {
+      border: 0;
+      border-top: 1px solid #eee;
+      margin: 22px 0;
+    }
 
     .callout {
-      margin: 18px 0 26px 0;
+      margin: 18px 0 22px 0;
       padding: 12px 14px;
       border: 1px solid #e6e6e6;
       border-radius: var(--radius);
@@ -59,7 +78,7 @@
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
-      margin-top: 10px;
+      margin-top: 12px;
     }
 
     .button {
@@ -69,11 +88,11 @@
       padding: 12px 16px;
       border-radius: var(--radius);
       text-decoration: none;
-      font-weight: 600;
+      font-weight: 700;
       border: 1px solid #111;
       background: #111;
       color: #fff;
-      min-height: 44px; /* nice tap target */
+      min-height: 44px;
       white-space: nowrap;
     }
 
@@ -81,19 +100,31 @@
       background: #fff;
       color: #111;
       border-color: #d0d0d0;
+      font-weight: 700;
     }
 
     .fineprint {
-      margin-top: 18px;
+      margin-top: 14px;
       font-size: 13px;
       color: #666;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.95em;
+    }
+
+    .muted {
+      color: #777;
     }
 
     /* Mobile: tighten spacing + stack buttons full-width */
     @media (max-width: 520px) {
       .wrap { padding: 32px var(--pad); }
       h1 { font-size: 34px; }
+      .quote { font-size: 18px; }
       .subhead { font-size: 16px; }
+      .lede { font-size: 15px; }
       .actions { flex-direction: column; }
       .button { width: 100%; }
     }
@@ -102,22 +133,28 @@
 <body>
   <div class="wrap">
     <h1>Pitstop Scan</h1>
+    <p class="quote"><i>“It usually works… but the tail is brutal.”</i></p>
 
-    <p class="subhead">
-      A 5-minute reliability snapshot for AI workflows that call external APIs.
+    <p class="lede">
+      Drop in a small JSONL receipt file — <a href="https://github.com/SirBrenton/pitstop-scan">get a ranked fix order in ~5 minutes</a>.
     </p>
-    <p class="subhead" style="margin-top:-10px; color:#555; font-size:15px;">
-      For teams seeing retries, rate limits, or ugly latency tails in production.
+    <p class="lede">
+      If retries are spiking, 429s are showing up, or you can’t tell which call is killing your p99 —
+<strong>Pitstop Scan shows where the pain concentrates and what to cap first.</strong>
     </p>
 
     <ul>
-      <li>Find which calls are burning retries</li>
-      <li>See where latency budgets are breached</li>
-      <li>Get “what to cap next” guardrails</li>
+      <li>Which calls are burning retry budget</li>
+      <li>Where latency budgets are breached — even on calls that returned “ok”</li>
+      <li>What to cap first: deadlines, retry caps, backoff rules, cooldown scope</li>
     </ul>
 
     <div class="callout">
-      Local-only. No prompts or payloads leave your machine.
+      ✓ Local-only by default.
+      <br>
+      ✓ Receipts contain no prompts, payloads, headers, tokens, or raw URLs.
+      <br>
+      ✓ Normalized metadata only.
     </div>
 
     <div class="actions">
@@ -128,9 +165,31 @@
       </a>
     </div>
 
+    <hr>
+
+    <p class="lede">
+      Don’t have receipts yet?
+    </p>
+    <p class="lede">
+      Run <code><i>make demo</i></code> to generate a synthetic sample and see the output before you commit anything real.
+    </p>
+
+    <p class="lede">
+      <strong>Want the fix order mapped to your specific hazards?</strong>
+    </p>
+    <p class="lede">
+      <a href="mailto:brentondwilliams@gmail.com?subject=Pitstop%20Scan%20Patch%20Plan&body=Hi%20Brent%2C%0A%0AI%27d%20like%20the%20Pitstop%20Scan%20Patch%20Plan.%0A%0AContext%3A%20%5Btooling%2Fstack%5D%0AScope%3A%20%5Bwhich%20workflows%5D%0A%0AThanks%2C%0A%5Bname%5D">
+        Send</a> <code>output/pitstop_pack_agg.zip</code> — derived summaries only, nothing raw —
+      and <strong>get back a 1-page Correctness Findings doc within 48 hours</strong>.
+    </p>
+
     <div class="fineprint">
-      Tip: don’t have logs yet? Run <code>make demo</code> to generate a tiny sample input.<br>
-      Want help? <a href="mailto:brentondwilliams@gmail.com">Email</a> <code>output/pitstop_pack_agg.zip</code> (derived summaries only — no raw logs).
+      <span class="muted">Input:</span> contract-compliant execution receipts (JSONL). <code>decision_event.v1</code> supported.<br>
+      <span class="muted">Tip:</span> outputs are derived summaries only — no raw receipts.
+      <br>
+      <br>
+      <br>
+      <span class="muted">©️ 2026 Brent Williams "All rights reserved"</span>
     </div>
   </div>
 </body>
