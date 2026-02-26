@@ -43,7 +43,7 @@ def _render_top_hazards(top: List[Dict[str, Any]]) -> str:
         elif top_err in ("auth_401",) or top_err.startswith("auth"):
             do = "Do: never retry auth failures → refresh creds / escalate."
         elif breach > 0 and breach_rate >= 0.5:
-            do = "Do: enforce a hard deadline (~budget_ms) + fallback."
+            do = "Do: enforce a hard per-attempt deadline (≈ budget.deadline_ms) + fallback."
         elif fail > 0:
             do = "Do: cap retries + add backoff; inspect error_class mix."
         else:
@@ -97,6 +97,7 @@ def _render_outcome_line(top_hazards: List[Dict[str, Any]], events: int) -> str:
 def _render_default_guardrails() -> str:
     return "\n".join(
         [
+            "",
             "## Default guardrails (baseline)",
             "",
             "Apply these everywhere, then implement the hazard-specific “Do:” actions above in order:",
@@ -143,14 +144,25 @@ def render_report(in_path: Path, summary: Dict[str, Any]) -> str:
 - latency_ms: mean={float(lat["mean"]):.1f} p50={float(lat["p50"]):.1f} p95={float(lat["p95"]):.1f} p99={float(lat["p99"]):.1f}
 
 {join_blocks(hazards_block, default_guardrails)}
-## Optional: Patch Plan (human)
-Send your **Pitstop Pack** (`output/pitstop_pack_agg.zip` — derived metrics only) to:
+## Share safely (derived outputs only)
+
+If you want help, send **derived outputs only** (no prompts, payloads, headers, tokens, or raw URLs):
+
+- `output/report.md`
+- `output/hazards.csv`
+- `output/signatures.csv`
+- `output/summary.json`
+- or the bundle: `output/pitstop_pack_agg.zip`
+
+## Optional: 48-hour Patch Plan (human)
+
+Send `output/pitstop_pack_agg.zip` to:
 [brentondwilliams@gmail.com]({mailto_url})
 
 Include:
-- Attach: `output/pitstop_pack_agg.zip`
 - Context: [stack]
-- Scope: [which workflows]
+- Scope: [workflow / service name]
+- Goal: [reduce 429s | reduce p99 | fix failover | etc.]
 
-> Note: this is a fast triage snapshot. The Patch Plan maps your top hazards into copy/paste guardrails in your codebase.
+**You get:** a 1-page fix order + copy/paste guardrails mapped to your top hazards.
 """
