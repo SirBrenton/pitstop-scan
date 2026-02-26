@@ -146,17 +146,14 @@ def render_report(in_path: Path, summary: Dict[str, Any]) -> str:
 {join_blocks(hazards_block, default_guardrails)}
 ## Share safely (derived outputs only)
 
-If you want help, send **derived outputs only** (no prompts, payloads, headers, tokens, or raw URLs):
+If you want help, send the **Pitstop Pack** (derived aggregates):
 
-- `output/report.md`
-- `output/hazards.csv`
-- `output/signatures.csv`
-- `output/summary.json`
-- or the bundle: `output/pitstop_pack_agg.zip`
+- `output/pitstop_pack_agg.zip` (recommended)
+- or: `output/report.md`, `output/hazards.csv`, `output/signatures.csv`, `output/summary.json`
 
 ## Optional: 48-hour Patch Plan (human)
 
-Send `output/pitstop_pack_agg.zip` to:
+Email the pack to:
 [brentondwilliams@gmail.com]({mailto_url})
 
 Include:

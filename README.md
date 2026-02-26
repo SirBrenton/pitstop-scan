@@ -40,7 +40,7 @@ Pitstop Scan turns that into a ranked list of **failure + breach signatures** yo
 ## What this is (plain English)
 
 You point Pitstop Scan at a JSONL “exhaust” file (**one receipt per line**).
-It groups receipts by **tool + operation + normalized endpoint + coarse context** and surfaces where:
+It groups receipts by **tool + operation + normalized endpoint + coarse tags** and surfaces where:
 - **latency breaches** concentrate (success can still be a breach), and/or
 - **failures** concentrate (timeouts, 429s, auth, 5xx)
 
@@ -149,11 +149,12 @@ If you want help (or you want to share safely), send **derived outputs only**:
 - `output/summary.json`
 - or the bundle: `output/pitstop_pack_agg.zip`
 
-These are **aggregates** (no prompts, payloads, headers, tokens, or raw URLs).
+These are aggregates (safe to share).
 
 ## 48-hour Patch Plan (human + copy/paste guardrails)
 
-Send `output/pitstop_pack_agg.zip` (derived summaries) to me.
+Send `output/pitstop_pack_agg.zip` (derived summaries) to:
+brentondwilliams@gmail.com
 
 Include:
 - Context: [stack]
@@ -164,12 +165,12 @@ Include:
 
 ## Want a verified before/after delta? (Phase 2 loop)
 
-If you can share **50–200 redacted execution receipts** (JSONL; metadata only), I can:
+If you want a measurable before/after, share **50–200 redacted execution receipts** (JSONL; metadata only). I can:
 
 - run Scan and return an updated hazard pack
-- map **top-2 guardrails** to your signatures
-- after you ship, re-scan to show a **before/after delta** (breach rate / timeout rate / p95)
+- map top-2 guardrails to your signatures
+- after you ship, re-scan to show a before/after delta (breach rate / timeout rate / p95)
 
 Reply with either:
-- a small redacted JSONL sample, or
-- the derived pack (`output/pitstop_pack_agg.zip`) if you can generate it locally.
+- the derived pack (`output/pitstop_pack_agg.zip`) to start, or
+- a small redacted JSONL sample if you want the delta proof loop.
