@@ -29,7 +29,7 @@ Read the spec:
 ## Why you’d run this
 
 If you’ve ever said:
-- “We usually can’t tell which call is killing tail latency.”
+- "We can’t tell (quickly) which call is killing tail latency.”
 - “Retries are spiking / rate limits are killing us.”
 - “It usually works… but the tail is brutal.”
 
@@ -40,7 +40,7 @@ Pitstop Scan turns that into a ranked list of **failure + breach signatures** yo
 ## What this is (plain English)
 
 You point Pitstop Scan at a JSONL “exhaust” file (**one receipt per line**).
-It groups receipts by **tool + operation + normalized endpoint + coarse tags** and surfaces where:
+It groups receipts by **tool + operation + normalized endpoint + coarse context** and surfaces where:
 - **latency breaches** concentrate (success can still be a breach), and/or
 - **failures** concentrate (timeouts, 429s, auth, 5xx)
 
@@ -56,7 +56,7 @@ It ends with concrete guardrails to implement first:
 
 Running the scan writes:
 
-- `output/report.md` — 1-page reliability snapshot + top-2 fixes
+- `output/report.md` — 1-page reliability snapshot + top fixes
 - `output/hazards.csv` — ranked hazards (highest leverage first)
 - `output/signatures.csv` — per-signature rollups
 - `output/summary.json` — machine totals (automation-friendly)
@@ -139,38 +139,25 @@ That’s enough to rank hazards and generate the pack.
 The report may include a priced loss model to help rank fixes.
 Treat it as tunable. The primary truth signals are breach rate and tail latency (p95/p99).
 
-## Share safely (derived outputs only)
+## Proof (sample hazard pack)
 
-If you want help (or you want to share safely), send **derived outputs only**:
+See a sample output pack (derived aggregates only):
+- **[proof/demo_pack_v0/report.md](proof/demo_pack_v0/report.md)**
+- [proof/demo_pack_v0/hazards.csv](proof/demo_pack_v0/hazards.csv)
+- [proof/demo_pack_v0/signatures.csv](proof/demo_pack_v0/signatures.csv)
+- [proof/demo_pack_v0/summary.json](proof/demo_pack_v0/summary.json)
 
-- `output/report.md`
-- `output/hazards.csv`
-- `output/signatures.csv`
-- `output/summary.json`
-- or the bundle: `output/pitstop_pack_agg.zip`
+## Patch Plan (optional)
 
-These are aggregates (safe to share).
-
-## 48-hour Patch Plan (human + copy/paste guardrails)
-
-Send `output/pitstop_pack_agg.zip` (derived summaries) to:
-brentondwilliams@gmail.com
-
-Include:
+Send **`output/pitstop_pack_agg.zip`** (derived only) to **brentondwilliams@gmail.com** with:
 - Context: [stack]
-- Scope: [which workflows]
-- Goal: [reduce 429s | reduce p99 | fix failover | etc.]
+- Scope: [workflow]
+- Goal: [reduce 429s | reduce p99 | fix failover]
 
-**You get:** a 1-page fix order + copy/paste guardrails mapped to your top hazards.
+You get: a 1-page fix order + copy/paste guardrails mapped to your top hazards.
 
-## Want a verified before/after delta? (Phase 2 loop)
+## Before/after delta (Phase 2 loop)
 
-If you want a measurable before/after, share **50–200 redacted execution receipts** (JSONL; metadata only). I can:
+If you can share **50–200 redacted receipts** (JSONL; metadata only), I’ll re-scan after you ship and return a before/after delta.
 
-- run Scan and return an updated hazard pack
-- map top-2 guardrails to your signatures
-- after you ship, re-scan to show a before/after delta (breach rate / timeout rate / p95)
-
-Reply with either:
-- the derived pack (`output/pitstop_pack_agg.zip`) to start, or
-- a small redacted JSONL sample if you want the delta proof loop.
+If you can’t share receipts, send the **derived pack** and I’ll still return a fix order (no delta).

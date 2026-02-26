@@ -1,0 +1,51 @@
+{
+  "events": 5,
+  "ok": 2,
+  "fail": 3,
+  "ok_rate": 0.4,
+  "budgeted_events": 5,
+  "breach_rate": 0.6,
+  "retries_mean": 0.0,
+  "latency_ms": {
+    "mean": 1762.0,
+    "p50": 920.0,
+    "p95": 4367.999999999999,
+    "p99": 4873.6
+  },
+  "top_hazards": [
+    {
+      "tool": "github/search_issues",
+      "op": "search_issues",
+      "env": "prod",
+      "region": "us",
+      "concurrency_bucket": "1-5",
+      "tier": "standard",
+      "count": 3,
+      "fail": 2,
+      "budgeted_events": 3,
+      "breach": 3,
+      "breach_rate": 1.0,
+      "lat_p95": 4684.0,
+      "retries_mean": 0.0,
+      "top_error_class": "timeout_deadline",
+      "pain_score": 44.684
+    },
+    {
+      "tool": "github/create_issue",
+      "op": "create_issue",
+      "env": "prod",
+      "region": "us",
+      "concurrency_bucket": "1-5",
+      "tier": "standard",
+      "count": 2,
+      "fail": 1,
+      "budgeted_events": 2,
+      "breach": 0,
+      "breach_rate": 0.0,
+      "lat_p95": 637.5,
+      "retries_mean": 0.0,
+      "top_error_class": "auth_401",
+      "pain_score": 5.6375
+    }
+  ]
+}
