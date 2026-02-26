@@ -29,7 +29,7 @@ Read the spec:
 ## Why you’d run this
 
 If you’ve ever said:
-- “We don’t know which calls are killing tail latency.”
+- “We usually can’t tell which call is killing tail latency.”
 - “Retries are spiking / rate limits are killing us.”
 - “It usually works… but the tail is brutal.”
 
@@ -40,7 +40,7 @@ Pitstop Scan turns that into a ranked list of **failure + breach signatures** yo
 ## What this is (plain English)
 
 You point Pitstop Scan at a JSONL “exhaust” file (**one receipt per line**).
-It groups receipts by **tool + operation + normalized endpoint + coarse context** and surfaces where:
+It groups receipts by **tool + operation + normalized endpoint + coarse tags** and surfaces where:
 - **latency breaches** concentrate (success can still be a breach), and/or
 - **failures** concentrate (timeouts, 429s, auth, 5xx)
 
@@ -139,14 +139,38 @@ That’s enough to rank hazards and generate the pack.
 The report may include a priced loss model to help rank fixes.
 Treat it as tunable. The primary truth signals are breach rate and tail latency (p95/p99).
 
+## Share safely (derived outputs only)
+
+If you want help (or you want to share safely), send **derived outputs only**:
+
+- `output/report.md`
+- `output/hazards.csv`
+- `output/signatures.csv`
+- `output/summary.json`
+- or the bundle: `output/pitstop_pack_agg.zip`
+
+These are aggregates (safe to share).
+
 ## 48-hour Patch Plan (human + copy/paste guardrails)
 
-If you want a short, targeted enforcement plan mapped to your top hazards, send:
+Send `output/pitstop_pack_agg.zip` (derived summaries) to:
+brentondwilliams@gmail.com
 
-- `output/pitstop_pack_agg.zip` (or the four derived files)
+Include:
+- Context: [stack]
+- Scope: [which workflows]
+- Goal: [reduce 429s | reduce p99 | fix failover | etc.]
 
-**What you send:** `report.md`, `hazards.csv`, `signatures.csv`, `summary.json` (derived outputs only).
+**You get:** a 1-page fix order + copy/paste guardrails mapped to your top hazards.
 
-**What you do NOT send:** raw exhaust, prompts, payloads, headers, tokens.
+## Want a verified before/after delta? (Phase 2 loop)
 
-**What you get back:** a 1-page “Correctness Findings + Fix Order” doc (deadlines, retry caps, 429 handling, cooldown scoping).
+If you want a measurable before/after, share **50–200 redacted execution receipts** (JSONL; metadata only). I can:
+
+- run Scan and return an updated hazard pack
+- map top-2 guardrails to your signatures
+- after you ship, re-scan to show a before/after delta (breach rate / timeout rate / p95)
+
+Reply with either:
+- the derived pack (`output/pitstop_pack_agg.zip`) to start, or
+- a small redacted JSONL sample if you want the delta proof loop.
