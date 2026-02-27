@@ -10,3 +10,4 @@ input/*
 *.egg-info/
 dist/
 build/
+*.txt
