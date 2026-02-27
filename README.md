@@ -2,27 +2,15 @@
 
 Local-first reliability triage for **AI + API execution**.
 
-**True North:** We make AI + API execution predictable: **budgets, routing, enforcement, receipts**.
+Given execution receipts, Scan produces a ranked hazard pack showing exactly where reliability is leaking:
 
-**Status:** Contract v1.0 shipped. Scan produces hazard packs from receipts.
+- where latency breaches concentrate
+- where failures concentrate (429s, timeouts, auth, 5xx)
+- which guardrails to implement first
 
-## The Execution Contract (v1.0)
+**Output:** a 1-page reliability snapshot + prioritized guardrail plan.
 
-Pitstop Scan is a **reference implementation** of the Pitstop Execution Contract:
-
-> `execute(intent, budget, policy) -> result, receipt`
-
-The contract defines the correctness rules for reliable execution:
-- **Budget semantics:** per-attempt deadlines, max elapsed, retry caps (attempts include fallbacks)
-- **Classification taxonomy:** 429 vs 402 vs timeout vs auth (retryable vs terminal)
-- **Scope correctness:** model vs provider vs credential (cooldown blast radius)
-- **Audit-grade receipts:** emitted on every attempt (including block/cooldown/preemption)
-
-Read the spec:
-
-→ **[EXECUTION_CONTRACT.md](./EXECUTION_CONTRACT.md)**
-
-**What Scan does:** given contract-compliant receipts, it outputs a ranked hazard pack — **what’s hurting most** and **what to cap next**.
+No dashboards. No calls. Just receipts → hazards → guardrails.
 
 ---
 
@@ -37,18 +25,48 @@ Pitstop Scan turns that into a ranked list of **failure + breach signatures** yo
 
 ---
 
-## What this is (plain English)
+## Quickstart (5 minutes)
 
-You point Pitstop Scan at a JSONL “exhaust” file (**one receipt per line**).
-It groups receipts by **tool + operation + normalized endpoint + coarse context** and surfaces where:
-- **latency breaches** concentrate (success can still be a breach), and/or
-- **failures** concentrate (timeouts, 429s, auth, 5xx)
+### 1) Install (repo-local venv)
+```bash
+make deps
+```
+#### Option A — You already have receipts (JSONL)
+Place your file at:
+```bash
+input/exhaust.jsonl
+```
 
-It ends with concrete guardrails to implement first:
-- budget-aligned deadlines
-- retry caps + max elapsed bounds
-- 429 backoff (+ respect Retry-After)
-- never-retry boundaries (401/403/402)
+Then run:
+```bash
+make run
+```
+Open the report:
+```bash
+open output/report.md   # macOS
+```
+#### Option B — You only have raw error logs
+If you don’t have receipts yet, paste raw logs into a file:
+```bash
+pitstop ingest blob.txt
+```
+This will:
+- classify the failure boundary (WAIT vs STOP)
+- normalize into decision_event.v1
+- run Scan automatically
+- generate a ranked hazard pack
+
+Then open:
+```bash
+open output/report.md
+```
+### No data yet? Run a demo
+Run a synthetic demo (creates a tiny input/exhaust.jsonl):
+```bash
+make demo
+open output/report.md
+```
+If `make demo works`, you’re ready — replace `input/exhaust.jsonl` with your real file and rerun `make run`.
 
 ---
 
@@ -67,52 +85,33 @@ Running the scan writes:
 
 ---
 
-## Privacy / safety (hard boundary)
+## Proof (sample hazard pack)
 
-- **Local-only by default.** No data leaves your machine.
-- Input should be **operational receipts**, not payloads.
-
-Receipts **MUST NOT** include:
-- prompts, message content, tool payload bodies, response bodies
-- headers, tokens, API keys, cookies
-- raw URLs or query strings (use `endpoint_norm`)
-
-Outputs are **derived summaries only** (no raw requests/responses).
+See a sample output pack (derived aggregates only):
+- **[proof/demo_pack_v0/report.md](proof/demo_pack_v0/report.md)**
+- [proof/demo_pack_v0/hazards.csv](proof/demo_pack_v0/hazards.csv)
+- [proof/demo_pack_v0/signatures.csv](proof/demo_pack_v0/signatures.csv)
+- [proof/demo_pack_v0/summary.json](proof/demo_pack_v0/summary.json)
 
 ---
 
-## Quickstart (5 minutes)
+## The Execution Contract (v1.0)
 
-### 1) Install (repo-local venv)
-```bash
-make deps
-```
+Pitstop Scan is a **reference implementation** of the Pitstop Execution Contract:
 
-### 2) Drop your exhaust here
+> `execute(intent, budget, policy) -> result, receipt`
 
-Place a JSONL file at:
-- input/exhaust.jsonl
+The contract defines the correctness rules for reliable execution:
+- **Budget semantics:** per-attempt deadlines, max elapsed, retry caps (attempts include fallbacks)
+- **Classification taxonomy:** 429 vs 402 vs timeout vs auth (retryable vs terminal)
+- **Scope correctness:** model vs provider vs credential (cooldown blast radius)
+- **Audit-grade receipts:** emitted on every attempt (including block/cooldown/preemption)
 
-(One JSON object per line.)
+Read the spec:
 
-### 3) Run
-```bash
-make run
-```
+→ **[EXECUTION_CONTRACT.md](./EXECUTION_CONTRACT.md)**
 
-### 4) Read the report
-```bash
-less output/report.md
-# macOS convenience:
-open output/report.md
-```
-### Don’t have receipts yet?
-Run a synthetic demo (creates a tiny input/exhaust.jsonl):
-```bash
-make demo
-open output/report.md
-```
-If `make demo works`, you’re ready — replace `input/exhaust.jsonl` with your real file and rerun `make run`.
+---
 
 ## Input contract (minimum viable)
 
@@ -139,22 +138,33 @@ That’s enough to rank hazards and generate the pack.
 The report may include a priced loss model to help rank fixes.
 Treat it as tunable. The primary truth signals are breach rate and tail latency (p95/p99).
 
-## Proof (sample hazard pack)
+---
 
-See a sample output pack (derived aggregates only):
-- **[proof/demo_pack_v0/report.md](proof/demo_pack_v0/report.md)**
-- [proof/demo_pack_v0/hazards.csv](proof/demo_pack_v0/hazards.csv)
-- [proof/demo_pack_v0/signatures.csv](proof/demo_pack_v0/signatures.csv)
-- [proof/demo_pack_v0/summary.json](proof/demo_pack_v0/summary.json)
+## Privacy / safety (hard boundary)
 
-## Patch Plan (optional)
+- **Local-only by default.** No data leaves your machine.
+- Input should be **operational receipts**, not payloads.
+
+Receipts **MUST NOT** include:
+- prompts, message content, tool payload bodies, response bodies
+- headers, tokens, API keys, cookies
+- raw URLs or query strings (use `endpoint_norm`)
+
+Outputs are **derived summaries only** (no raw requests/responses).
+
+---
+
+## Need a fix order mapped to your stack?
 
 Send **`output/pitstop_pack_agg.zip`** (derived only) to **brentondwilliams@gmail.com** with:
 - Context: [stack]
 - Scope: [workflow]
 - Goal: [reduce 429s | reduce p99 | fix failover]
 
-You get: a 1-page fix order + copy/paste guardrails mapped to your top hazards.
+You’ll receive:
+- a prioritized guardrail plan
+- specific knob changes
+- a before/after verification checklist
 
 ## Before/after delta (Phase 2 loop)
 
