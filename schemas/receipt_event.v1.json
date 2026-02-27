@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pitstop://schemas/receipt_event.v1",
+  "title": "Pitstop Receipt Event v1 (Compat Wrapper)",
+  "description": "Accepts either Scan-minimal receipts or canonical decision_event.v1 receipts.",
+  "oneOf": [
+    { "$ref": "pitstop://schemas/receipt_event.scan_shape.v1" },
+    { "$ref": "pitstop://schemas/decision_event.v1" }
+  ]
+}

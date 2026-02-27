@@ -6,3 +6,7 @@ output/*
 input/*
 !input/.gitkeep
 .DS_Store
+# packaging
+*.egg-info/
+dist/
+build/

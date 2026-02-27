@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pitstop://schemas/receipt_event.scan_shape.v1",
+  "title": "Pitstop Receipt Event v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "ts",
+    "execution_id",
+    "attempt_id",
+    "target",
+    "outcome",
+    "cost",
+    "budget"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "pitstop.receipt_event.v1"
+    },
+    "ts": {
+      "type": "string",
+      "description": "RFC3339 timestamp",
+      "format": "date-time"
+    },
+    "execution_id": { "type": "string" },
+    "attempt_id": { "type": "string" },
+
+    "parent_execution_id": { "type": "string" },
+    "span_id": { "type": "string" },
+
+    "target": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["tool_id", "operation", "endpoint_norm"],
+      "properties": {
+        "tool_id": { "type": "string" },
+        "operation": { "type": "string" },
+        "endpoint_norm": {
+          "type": "string",
+          "description": "No raw query strings. Prefer host + path template, redacted."
+        },
+        "provider": { "type": "string" },
+        "model": { "type": "string" }
+      }
+    },
+
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "workflow": { "type": "string" },
+        "env": { "type": "string" },
+        "region": { "type": "string" },
+        "tenant": { "type": "string" },
+        "request_kind": { "type": "string" }
+      }
+    },
+
+    "outcome": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["ok", "fail", "blocked"] },
+        "http_status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "error_class": {
+          "type": "string",
+          "description": "e.g. rate_limit_429, timeout_deadline, auth_401, server_5xx, provider_cooldown"
+        },
+        "error_code": { "type": "string" },
+        "retryable": { "type": "boolean" }
+      }
+    },
+
+    "cost": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["latency_ms"],
+      "properties": {
+        "latency_ms": { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "budget": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["deadline_ms"],
+      "properties": {
+        "deadline_ms": { "type": "number", "minimum": 0 },
+        "max_elapsed_ms": { "type": "number", "minimum": 0 },
+        "retry_budget": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "decision": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "action": { "type": "string", "enum": ["allow", "retry", "fallback", "cooldown", "block"] },
+        "reason": { "type": "string" }
+      }
+    },
+
+    "meta": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "client": { "type": "string" },
+        "client_version": { "type": "string" }
+      }
+    }
+  }
+}
