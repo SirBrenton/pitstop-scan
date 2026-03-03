@@ -1,13 +1,33 @@
-import json, hashlib, datetime as dt, re
+#!/usr/bin/env python3
+"""
+Canon SVIX-2200 demo receipts into Pitstop decision_event.v1 so Scan can run.
 
-RAW = "input/svix_2200.raw.jsonl"
-OUT = "input/exhaust.jsonl"
+Input:  input/svix_2200.raw.jsonl   (your synthetic lines, any shape)
+Output: input/exhaust.jsonl         (decision_event.v1 canonical)
+"""
 
+from __future__ import annotations
+
+import datetime as dt
+import hashlib
+import json
+import math
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+
+INP = Path("input/svix_2200.raw.jsonl")
+OUT = Path("input/exhaust.jsonl")
+
+# Deterministic-ish timeline for proof packs (keeps retry-after math stable)
 BASE_TS = dt.datetime(2026, 3, 3, 14, 0, 0, tzinfo=dt.timezone.utc)
 
-# --- helpers
 
-def mk_receipt_id(obj: dict) -> str:
+def iso_z(ts: dt.datetime) -> str:
+    return ts.isoformat().replace("+00:00", "Z")
+
+
+def mk_receipt_id(obj: Dict[str, Any]) -> str:
     base = {
         "execution_id": obj.get("execution_id"),
         "attempt_id": obj.get("attempt_id"),
@@ -21,186 +41,134 @@ def mk_receipt_id(obj: dict) -> str:
     s = json.dumps(base, sort_keys=True, separators=(",", ":"))
     return "r_" + hashlib.sha1(s.encode("utf-8")).hexdigest()[:16]
 
-def parse_retry_after_ms(headers: dict) -> int | None:
-    """
-    Supports:
-      - delta-seconds (int/float)
-      - RFC 2822 HTTP-date
-    Returns milliseconds, or None if not parseable.
-    """
-    if not headers:
-        return None
-    ra = None
-    # accept different casings
-    for k in ("retry-after", "Retry-After", "RETRY_AFTER"):
-        if k in headers:
-            ra = headers[k]
-            break
+
+def parse_retry_after_ms(src: Dict[str, Any]) -> Optional[int]:
+    # Expect header in src["receipt"]["headers"]["retry-after"]
+    receipt = src.get("receipt") or {}
+    headers = (receipt.get("headers") or {}) if isinstance(receipt, dict) else {}
+    ra = headers.get("retry-after") or headers.get("Retry-After")
     if not ra:
         return None
 
-    # delta seconds (float allowed)
+    # For this proof canonicalizer: support delta-seconds (int/float) only.
+    # (HTTP-date parsing is doable, but you already normalized dates to seconds in your demo.)
     try:
-        sec = float(str(ra).strip())
-        if sec < 0:
-            return None
-        sec_int = int(sec) if sec.is_integer() else int(sec) + 1  # ceil
-        return sec_int * 1000
-    except Exception:
-        pass
-
-    # RFC 2822 date
-    try:
-        # Python's email.utils can parse RFC2822-ish
-        from email.utils import parsedate_to_datetime
-        d = parsedate_to_datetime(str(ra).strip())
-        if d.tzinfo is None:
-            d = d.replace(tzinfo=dt.timezone.utc)
-        delta = (d.astimezone(dt.timezone.utc) - dt.datetime.now(dt.timezone.utc)).total_seconds()
-        if delta < 0:
-            return 0
-        return int(delta * 1000)
+        seconds_f = float(str(ra).strip())
+        seconds = int(math.ceil(seconds_f))
+        return max(0, seconds * 1000)
     except Exception:
         return None
 
-def canon_error_class(status: str, error_class: str | None, http_status: int | None) -> str | None:
+
+def canon_error_class(status: str, http_status: Optional[int], raw_error_class: Optional[str]) -> Optional[str]:
     if status != "fail":
         return None
-    # Map your raw “http/timeout” into Scan’s enums
+
+    # Map raw -> contract enums
     if http_status == 429:
         return "rate_limit_429"
-    if http_status and 500 <= http_status <= 599:
+    if http_status is not None and 500 <= http_status <= 599:
         return "server_5xx"
-    if error_class in ("timeout", "deadline", "context_deadline"):
+    # allow raw "timeout" marker
+    if (raw_error_class or "").lower() in {"timeout", "deadline", "context_deadline"}:
         return "timeout_deadline"
-    if http_status in (401,):
-        return "auth_401"
-    if http_status in (403,):
-        return "auth_403"
-    if http_status in (402,):
-        return "billing_402"
-    if http_status and 400 <= http_status <= 499:
-        return "invalid_4xx"
+
     return "unknown"
 
-def decide_action(raw_decision_action: str, status: str, attempt_budget_exhausted: bool) -> str:
-    # Your raw used "ok/stop" which is not valid in schema.
-    if status == "ok":
-        return "allow"
-    if attempt_budget_exhausted:
-        return "block"
-    # otherwise retry path
-    return "retry"
 
-def reason_code(status: str, http_status: int | None, ra_ms: int | None, backoff_ms: int | None, capped: bool, jitter_floor: bool, attempt_budget_exhausted: bool) -> str:
-    if status == "ok":
-        return "ok"
-    if attempt_budget_exhausted:
-        return "attempt_budget_exhausted"
-    if http_status == 429 and ra_ms is not None:
-        # This is the core of the story:
-        # did we honor Retry-After as a floor, and did jitter undercut it?
-        if jitter_floor:
-            # guaranteed never earlier than Retry-After
-            return "retry_after_floor_strict"
-        return "retry_after_floor_symmetric_jitter_risk"
-    if http_status == 429:
-        return "rate_limit_429_backoff"
-    if http_status == 503 and ra_ms is not None:
-        return "server_overload_retry_after"
-    if http_status == 503:
-        return "server_overload_backoff"
-    return "retry_generic"
-
-def derive_backoff_ms(ra_ms: int | None, base_backoff_ms: int, cap_ms: int, strict_floor: bool) -> tuple[int, bool]:
+def canon_decision(src_action: str) -> tuple[str, str, str]:
     """
-    Compute scheduled delay for demo purposes:
-      delay = max(base_backoff_ms, ra_ms) if ra_ms else base_backoff_ms
-      delay = min(delay, cap_ms)
-    Return: (delay, capped?)
+    decision.action must be one of:
+      allow, allow_shadow, retry, fallback, cooldown, block
     """
-    delay = base_backoff_ms
-    if ra_ms is not None:
-        delay = max(delay, ra_ms)
-    capped = delay > cap_ms
-    delay = min(delay, cap_ms)
-    return delay, capped
+    a = (src_action or "").lower().strip()
 
-# --- main
+    if a in {"ok", "allow"}:
+        return ("allow", "ok", "enforce")
+    if a in {"retry"}:
+        return ("retry", "retryable_failure", "enforce")
+    if a in {"stop", "block"}:
+        return ("block", "attempt_budget_exhausted", "enforce")
 
-def main():
-    # demo knobs (tune these to match Svix semantics you want to illustrate)
-    BASE_BACKOFF_MS = 30_000        # internal schedule stage (example)
-    CAP_MS = 2 * 60 * 60 * 1000     # 2 hours fixed cap
-    STRICT_FLOOR = True            # set False to simulate symmetric jitter undercut risk
+    # default conservative
+    return ("retry", "unknown_action_mapped_to_retry", "enforce")
 
-    with open(RAW, "r") as f, open(OUT, "w") as g:
-        i = 0
+
+def main() -> None:
+    if not INP.exists():
+        raise SystemExit(f"Missing input: {INP} (create it by copying your synthetic jsonl there)")
+
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+
+    i = 0
+    with INP.open("r", encoding="utf-8") as f, OUT.open("w", encoding="utf-8") as g:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             src = json.loads(line)
 
-            # pull from your raw
-            execution_id = src.get("execution_id", "svix-2200-demo")
-            attempt_id_raw = src.get("attempt_id")
+            # Pull target fields up to top-level (schema requires these top-level)
+            tgt = src.get("target") or {}
+            tool_id = src.get("tool_id") or tgt.get("tool_id") or "unknown-tool"
+            operation = src.get("operation") or tgt.get("operation") or "unknown-op"
+            endpoint_norm = src.get("endpoint_norm") or tgt.get("endpoint_norm") or "unknown-endpoint"
 
-            # attempt_id must be integer
+            # attempt_id must be integer >= 1
             try:
-                attempt_id = int(attempt_id_raw)
+                attempt_id = int(src.get("attempt_id"))
             except Exception:
                 attempt_id = i + 1
-
-            target = src.get("target") or {}
-            tool_id = target.get("tool_id") or src.get("tool_id") or "svix-webhooks"
-            operation = target.get("operation") or src.get("operation") or "deliver"
-            endpoint_norm = target.get("endpoint_norm") or src.get("endpoint_norm") or "dest://example"
 
             outcome = src.get("outcome") or {}
             status = outcome.get("status") or "fail"
             http_status = outcome.get("http_status")
-            raw_err_class = outcome.get("error_class")
+            if http_status is not None:
+                try:
+                    http_status = int(http_status)
+                except Exception:
+                    http_status = None
 
-            # receipt headers
-            receipt = src.get("receipt") or {}
-            headers = (receipt.get("headers") or {}) if isinstance(receipt, dict) else {}
-            ra_ms = parse_retry_after_ms(headers)
+            ra_ms = parse_retry_after_ms(src)
 
-            # attempt budget exhausted?
-            attempt_budget_exhausted = (receipt.get("note") == "attempt-budget exhausted")
+            # Decision mapping (must be schema-valid)
+            src_dec = src.get("decision") or {}
+            action, rcode, dmode = canon_decision(src_dec.get("action", ""))
 
-            # compute demo delay semantics
-            backoff_ms, capped = derive_backoff_ms(ra_ms, BASE_BACKOFF_MS, CAP_MS, STRICT_FLOOR)
+            # Retry semantics for Scan: mark retry attempts
+            attempt_kind = "primary" if attempt_id == 1 else "retry"
+            prior_attempts = max(0, attempt_id - 1)
 
-            # jitter floor semantics: if STRICT_FLOOR then jitter can’t undercut RA
-            jitter_floor = bool(STRICT_FLOOR)
+            # Budget must include max_elapsed_ms (schema-required)
+            b = src.get("budget") or {}
+            deadline_ms = int(b.get("deadline_ms", 30000))
+            retry_budget = int(b.get("retry_budget", 0))
+            max_elapsed_ms = int(b.get("max_elapsed_ms", 120000))
 
-            canon_err = canon_error_class(status, raw_err_class, http_status)
+            # Backoff proof: if retry_after exists, show we floor backoff to it
+            # (and you can later add jitter-under-cut examples)
+            backoff_ms = None
+            if action == "retry":
+                # baseline backoff (example): 1s
+                base_backoff_ms = 1000
+                if ra_ms is not None:
+                    backoff_ms = float(max(base_backoff_ms, ra_ms))
+                else:
+                    backoff_ms = float(base_backoff_ms)
 
-            # required ts_utc
-            ts = (BASE_TS + dt.timedelta(seconds=i)).isoformat().replace("+00:00", "Z")
+            canon_err = canon_error_class(status=status, http_status=http_status, raw_error_class=outcome.get("error_class"))
 
-            # required budget fields
-            budget = src.get("budget") or {}
-            deadline_ms = int((budget.get("deadline_ms") or 30_000))
-            retry_budget = int((budget.get("retry_budget") or 0))
-            max_elapsed_ms = int((budget.get("max_elapsed_ms") or 120_000))
-
-            # action + decision fields
-            raw_action = (src.get("decision") or {}).get("action", "")
-            action = decide_action(raw_action, status, attempt_budget_exhausted)
-            rcode = reason_code(status, http_status, ra_ms, backoff_ms, capped, jitter_floor, attempt_budget_exhausted)
-
-            out = {
+            out: Dict[str, Any] = {
                 "schema_version": "decision_event.v1",
-                "ts_utc": ts,
-                "execution_id": execution_id,
+                "receipt_id": "",  # filled after
+                "ts_utc": iso_z(BASE_TS + dt.timedelta(seconds=i)),
+                "execution_id": src.get("execution_id") or "svix-2200-demo",
                 "attempt_id": attempt_id,
+                "attempt": {"kind": attempt_kind, "prior_attempts": prior_attempts},
 
-                "tool_id": tool_id,
-                "operation": operation,
-                "endpoint_norm": endpoint_norm,
+                "tool_id": str(tool_id),
+                "operation": str(operation),
+                "endpoint_norm": str(endpoint_norm),
 
                 "budget": {
                     "deadline_ms": deadline_ms,
@@ -209,41 +177,39 @@ def main():
                     "token_budget": None,
                 },
 
+                # Optional policy block (schema-typed). Keep it valid.
                 "policy": {
                     "mode": "enforce",
-                    "fail_behavior": "fail_closed",                    "backoff": {
-                        "strategy": "exp",
+                    "fail_behavior": "fail_closed",
+                    "concurrency_cap": None,
+                    "cooldown": {"enabled": False},
+                    "backoff": {
+                        "strategy": "exponential",
                         "jitter": True,
                         "respect_retry_after": True,
                     },
-                    "concurrency_cap": None,
-                    "cooldown": {"enabled": False},
                 },
 
                 "outcome": {
                     "status": status,
-                    "error_class": canon_err,
+                    "error_class": canon_err,          # required when fail
                     "http_status": http_status,
                     "retry_after_ms": ra_ms,
                 },
 
                 "cost": {
-                    "latency_ms": float((src.get("cost") or {}).get("latency_ms", 0)),
-                    "backoff_ms": float(backoff_ms) if action == "retry" else None,
+                    "latency_ms": float((src.get("cost") or {}).get("latency_ms", 0.0)),
+                    "backoff_ms": backoff_ms,
                     "tokens_est": None,
                 },
 
                 "decision": {
                     "action": action,
                     "reason_code": rcode,
-                    "mode": "enforce",
+                    "mode": dmode,
                 },
 
-                "evidence": {
-                    "classification_confidence": 0.9,
-                },
-
-                # keep original raw receipt evidence (allowed by additionalProperties:true)
+                # Keep raw evidence (allowed by additionalProperties:true)
                 "receipt": src.get("receipt"),
             }
 
@@ -252,6 +218,7 @@ def main():
             i += 1
 
     print(f"wrote {OUT} events={i}")
+
 
 if __name__ == "__main__":
     main()
