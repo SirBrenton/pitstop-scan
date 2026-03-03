@@ -120,11 +120,63 @@ def render_report(in_path: Path, summary: Dict[str, Any]) -> str:
     breach_rate = float(summary["breach_rate"])
     budgeted_events = int(summary.get("budgeted_events", 0) or 0)
 
-    regime = "breach-dominant" if breach_rate >= 0.5 else "failure-dominant"
+    fail_rate = (fail / events) if events else 0.0
+
+    if fail_rate >= 0.5:
+        regime = "failure-dominant"
+    elif breach_rate >= 0.5:
+        regime = "breach-dominant"
+    else:
+        regime = "mixed"
 
     top_hazards = summary.get("top_hazards", []) or []
     hazards_block = _render_top_hazards(top_hazards)
     outcome_block = _render_outcome_line(top_hazards, events)
+
+    retries_mean = float(summary.get("retries_mean", 0.0) or 0.0)
+    explainer = _render_regime_explainer(
+        regime,
+        fail_rate=fail_rate,
+        breach_rate=breach_rate,
+        retries_mean=retries_mean,
+    )
+
+    mailto_url = patch_plan_mailto_url()
+    default_guardrails = _render_default_guardrails()
+
+    return f"""# Pitstop Scan — Reliability Snapshot (v0)
+
+**Input:** {in_path}
+**Result:** **{regime}** in this sample — {explainer}
+
+{outcome_block}## Summary stats
+- events: **{events}** (ok={ok}, fail={fail})
+- ok_rate: **{pct(ok_rate)}**
+- budgeted_events: **{budgeted_events}**
+- breach_rate (latency > budget, budgeted events only): **{pct(breach_rate)}**
+- retries_mean: **{retries_mean:.3f}**
+- latency_ms: mean={float(lat["mean"]):.1f} p50={float(lat["p50"]):.1f} p95={float(lat["p95"]):.1f} p99={float(lat["p99"]):.1f}
+
+{join_blocks(hazards_block, default_guardrails)}
+## Share safely (derived outputs only)
+...
+"""
+
+def _render_regime_explainer(regime: str, *, fail_rate: float, breach_rate: float, retries_mean: float) -> str:
+    if regime == "failure-dominant":
+        return (
+            f"Most pain is **hard failures** (fail_rate={pct(fail_rate)}), not budget breaches "
+            f"(breach_rate={pct(breach_rate)}). Retries_mean={retries_mean:.2f}."
+        )
+    if regime == "breach-dominant":
+        return (
+            f"Most pain is **budget breaches / tail latency** (breach_rate={pct(breach_rate)}), even when calls succeed. "
+            f"fail_rate={pct(fail_rate)}. Retries_mean={retries_mean:.2f}."
+        )
+    return (
+        f"Pain is **mixed** (fail_rate={pct(fail_rate)}, breach_rate={pct(breach_rate)}). "
+        f"Retries_mean={retries_mean:.2f}."
+    )
 
     mailto_url = patch_plan_mailto_url()
 
