@@ -1,0 +1,34 @@
+{
+  "events": 10,
+  "ok": 2,
+  "fail": 8,
+  "ok_rate": 0.2,
+  "budgeted_events": 10,
+  "breach_rate": 0.1,
+  "retries_mean": 0.0,
+  "latency_ms": {
+    "mean": 3123.0,
+    "p50": 130.0,
+    "p95": 16608.499999999967,
+    "p99": 27361.700000000004
+  },
+  "top_hazards": [
+    {
+      "tool": "svix-webhooks",
+      "op": "deliver",
+      "env": "na",
+      "region": "na",
+      "concurrency_bucket": "na",
+      "tier": "na",
+      "count": 10,
+      "fail": 8,
+      "budgeted_events": 10,
+      "breach": 1,
+      "breach_rate": 0.1,
+      "lat_p95": 16608.499999999967,
+      "retries_mean": 0.0,
+      "top_error_class": "rate_limit_429",
+      "pain_score": 66.60849999999996
+    }
+  ]
+}
