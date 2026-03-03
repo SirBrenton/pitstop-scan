@@ -7,7 +7,7 @@
 **What Scan found:** failure-dominant 429 signature with high retry pressure; respecting Retry-After as a floor (plus a cap; jitter must not undercut) reduces wasted retries and load.
 
 **Artifacts (derived only):**
-- `pack/report.md`
-- `pack/hazards.csv`
-- `pack/signatures.csv`
-- `pack/summary.json`
+- `derived/report.md`
+- `derived/hazards.csv`
+- `derived/signatures.csv`
+- `derived/summary.json`
