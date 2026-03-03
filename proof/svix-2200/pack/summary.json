@@ -5,7 +5,7 @@
   "ok_rate": 0.2,
   "budgeted_events": 10,
   "breach_rate": 0.1,
-  "retries_mean": 0.0,
+  "retries_mean": 9,
   "latency_ms": {
     "mean": 3123.0,
     "p50": 130.0,
@@ -26,7 +26,7 @@
       "breach": 1,
       "breach_rate": 0.1,
       "lat_p95": 16608.499999999967,
-      "retries_mean": 0.0,
+      "retries_mean": 9.0,
       "top_error_class": "rate_limit_429",
       "pain_score": 66.60849999999996
     }
