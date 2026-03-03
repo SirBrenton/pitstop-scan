@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Tuple
 from .report import render_report
 from .schema_validate import load_schema, validate_against_schema
 
+from collections import defaultdict
+
 def percentile(sorted_vals: List[float], p: float) -> float:
     if not sorted_vals:
         return 0.0
@@ -63,6 +65,97 @@ def _sig_key(e: Dict[str, Any]) -> Tuple[str, str, str, str, str, str]:
 
     return (tool, op, env, region, conc, tier)
 
+def _exec_id(e: Dict[str, Any]) -> str:
+    return str(e.get("execution_id") or "")
+
+def retries_mean_over_executions(events: List[Dict[str, Any]]) -> float:
+    """
+    retries per execution = max(0, num_events_in_execution - 1)
+    averaged over executions.
+    """
+    attempts_per_exec: Dict[str, int] = defaultdict(int)
+    for e in events:
+        ex = _exec_id(e)
+        if not ex:
+            continue
+        attempts_per_exec[ex] += 1
+
+    if not attempts_per_exec:
+        return 0.0
+
+    retries = [max(0, n - 1) for n in attempts_per_exec.values()]
+    return statistics.mean(retries) if retries else 0.0
+
+def retries_mean_by_signature(
+    events: List[Dict[str, Any]],
+) -> Dict[Tuple[str, str, str, str, str, str], float]:
+    """
+    Group executions by signature; compute mean retries per execution in that signature.
+    Notes:
+    - Assumes a given execution_id maps to one signature (reasonable for typical pipelines).
+    - If an execution spans signatures, last write wins (still deterministic).
+    """
+    attempts_per_exec: Dict[str, int] = defaultdict(int)
+    sig_per_exec: Dict[str, Tuple[str, str, str, str, str, str]] = {}
+
+    for e in events:
+        ex = _exec_id(e)
+        if not ex:
+            continue
+        attempts_per_exec[ex] += 1
+        sig_per_exec[ex] = _sig_key(e)
+
+    retries_by_sig: Dict[Tuple[str, str, str, str, str, str], List[int]] = defaultdict(list)
+    for ex, n in attempts_per_exec.items():
+        sig = sig_per_exec.get(ex)
+        if not sig:
+            continue
+        retries_by_sig[sig].append(max(0, n - 1))
+
+    return {sig: (statistics.mean(xs) if xs else 0.0) for sig, xs in retries_by_sig.items()}
+
+def _exec_id(e: Dict[str, Any]) -> str:
+    return str(e.get("execution_id") or "")
+
+def retries_mean_over_executions(events: List[Dict[str, Any]]) -> float:
+    """
+    retries per execution = max(0, num_events_in_execution - 1)
+    averaged over executions.
+    """
+    attempts_per_exec: Dict[str, int] = defaultdict(int)
+    for e in events:
+        ex = _exec_id(e)
+        if not ex:
+            continue
+        attempts_per_exec[ex] += 1
+    if not attempts_per_exec:
+        return 0.0
+    retries = [max(0, n - 1) for n in attempts_per_exec.values()]
+    return statistics.mean(retries) if retries else 0.0
+
+def retries_mean_by_signature(events: List[Dict[str, Any]]) -> Dict[Tuple[str, str, str, str, str, str], float]:
+    """
+    Group executions by signature; compute mean retries per execution in that signature.
+    """
+    attempts_per_exec: Dict[str, int] = defaultdict(int)
+    sig_per_exec: Dict[str, Tuple[str, str, str, str, str, str]] = {}
+
+    for e in events:
+        ex = _exec_id(e)
+        if not ex:
+            continue
+        attempts_per_exec[ex] += 1
+        sig_per_exec[ex] = _sig_key(e)
+
+    retries_by_sig: Dict[Tuple[str, str, str, str, str, str], List[int]] = defaultdict(list)
+    for ex, n in attempts_per_exec.items():
+        sig = sig_per_exec.get(ex)
+        if not sig:
+            continue
+        retries_by_sig[sig].append(max(0, n - 1))
+
+    return {sig: (statistics.mean(xs) if xs else 0.0) for sig, xs in retries_by_sig.items()}
+
 
 def _is_ok(e: Dict[str, Any]) -> bool:
     out = e.get("outcome") or {}
@@ -94,10 +187,12 @@ def compute_signature_rollups(events: List[Dict[str, Any]]) -> List[Dict[str, An
     for e in events:
         groups.setdefault(_sig_key(e), []).append(e)
 
+    # Compute once (was previously recomputed inside the per-group loop).
+    retries_mean_map = retries_mean_by_signature(events)
+        
     rollups: List[Dict[str, Any]] = []
     for key, evs in groups.items():
         lat = sorted(float((e.get("cost") or {}).get("latency_ms", 0.0)) for e in evs)
-        retries = [float((e.get("cost") or {}).get("retries", 0)) for e in evs]
         ok_count = sum(1 for e in evs if _is_ok(e))
         fail_count = len(evs) - ok_count
         budgeted_count = sum(1 for e in evs if _is_budgeted(e))
@@ -128,7 +223,7 @@ def compute_signature_rollups(events: List[Dict[str, Any]]) -> List[Dict[str, An
                 "budgeted_events": budgeted_count,
                 "breach": breach_count,
                 "breach_rate": (breach_count / budgeted_count) if budgeted_count else 0.0,
-                "retries_mean": statistics.mean(retries) if retries else 0.0,
+                "retries_mean": float(retries_mean_map.get(key, 0.0)),   
                 "lat_mean": statistics.mean(lat) if lat else 0.0,
                 "lat_p50": percentile(lat, 50),
                 "lat_p95": percentile(lat, 95),
@@ -265,7 +360,7 @@ def run_scan(in_path: Path, out_dir: Path) -> None:
         "ok_rate": (len(ok) / len(events)) if events else 0.0,
         "budgeted_events": len(budgeted),
         "breach_rate": (len(breaches) / len(budgeted)) if budgeted else 0.0,
-        "retries_mean": statistics.mean([float((e.get("cost") or {}).get("retries", 0)) for e in events]) if events else 0.0,
+        "retries_mean": retries_mean_over_executions(events),
         "latency_ms": {
             "mean": statistics.mean(latencies) if latencies else 0.0,
             "p50": percentile(lat_sorted, 50),
