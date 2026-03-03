@@ -1,13 +1,15 @@
-.venv/
+# runtime scratch
+input/*
+output/*
+!input/.gitkeep
+!output/.gitkeep
+
+# local scratch
+scratch/
+blob.txt
+
+# python junk
 __pycache__/
 *.pyc
-output/*
-!output/.gitkeep
-input/*
-!input/.gitkeep
 .DS_Store
-# packaging
-*.egg-info/
-dist/
-build/
-*.txt
+._*
