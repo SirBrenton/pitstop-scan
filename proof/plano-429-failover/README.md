@@ -47,6 +47,37 @@ capacity loss or quota exhaustion, not rate limiting.
 | 5xx / timeout | retry with backoff |
 | quota exhausted | failover allowed |
 
+## Pitstop Signature
+
+**Hazard class:** `cooldown_ignored_by_selection`
+
+**Observed pattern**
+
+Gateways implement “honor Retry-After” inside the retry loop, but provider/model election
+can still reselect a cooling-down provider between attempts.
+
+That turns cooldown into routing thrash:
+
+- repeated reselection of a blocked provider
+- herd behavior under load
+- “spray traffic until something works” failover
+
+**Invariant**
+
+Cooldown must be consulted by provider selection, not only by the retry loop.
+
+Conceptual shape:
+
+```text
+eligible = providers.filter(p => p.cooldown_until <= now)
+selected = select(eligible)
+```
+
+**Regression test (proof)**
+
+See: `REGRESSION_TEST.md` (A is ineligible until `t >= Retry-After`, while alternates remain eligible).
+
+
 ## Reference receipt
 
 See:
