@@ -18,13 +18,13 @@ That turns “slow down” into a thundering herd.
 
 ### Drop-in artifact
 - `policy.py`: a tiny stdlib-only policy you can paste into a Python codebase
-- `test_policy.py`: 3 tests that enforce the invariant
+- tests: verify the invariant and retry behavior
 
 ### Run the tests
 From repo root:
 
 ```bash
-pytest -q receipts/429-floor/test_policy.py
+python -m pytest -q receipts/429-floor
 ```
 ### Minimal integration sketch
 
@@ -43,3 +43,4 @@ if should_retry(status_code=resp.status, retry_after_s=retry_after, ...):
     sleep = compute_sleep_s(...)
     time.sleep(sleep)
 ```
+This invariant is one of the guardrails Pitstop Scan will often recommend when 429 hazards appear in a hazard pack.
