@@ -95,6 +95,17 @@ See a sample output pack (derived aggregates only):
 
 ---
 
+## Receipts (drop-in invariants)
+
+Small, runnable “truth artifacts”: invariant → policy → tests → verification.
+
+- **[receipts/README.md](receipts/README.md)** — index of receipts you can paste into a codebase
+- **[429-floor](receipts/429-floor/README.md)** — Retry-After is a floor (policy + tests)
+
+These receipts are the guardrails the scan will often recommend.
+
+---
+
 ## The Execution Contract (v1.0)
 
 Pitstop Scan is a **reference implementation** of the Pitstop Execution Contract:
@@ -154,20 +165,30 @@ Outputs are **derived summaries only** (no raw requests/responses).
 
 ---
 
-## Need a fix order mapped to your stack?
+## Want help applying the fix order?
 
-Send **`output/pitstop_pack_agg.zip`** (derived only) to **brentondwilliams@gmail.com** with:
-- Context: [stack]
-- Scope: [workflow]
-- Goal: [reduce 429s | reduce p99 | fix failover]
+If you'd like a second set of eyes on your hazard pack, send the **derived pack only**:
+
+`output/pitstop_pack_agg.zip`
+
+to **brentondwilliams@gmail.com** with:
+
+- **Stack:** (e.g. Python + OpenAI + Redis)
+- **Workflow:** (e.g. agent toolchain, ingestion pipeline)
+- **Goal:** (reduce 429s | reduce p99 | stabilize retries | fix failover)
 
 You’ll receive:
+
 - a prioritized guardrail plan
-- specific knob changes
-- a before/after verification checklist
+- concrete configuration / policy changes
+- a verification checklist to confirm the fix worked
 
-## Before/after delta (Phase 2 loop)
+No calls required. Just artifacts → fix order → verification.
 
-If you can share **50–200 redacted receipts** (JSONL; metadata only), I’ll re-scan after you ship and return a before/after delta.
+---
 
-If you can’t share receipts, send the **derived pack** and I’ll still return a fix order (no delta).
+## Before / after delta (optional)
+
+If you can share **50–200 redacted receipts** (JSONL metadata only), I can re-run the scan after you ship the guardrails and return a **before/after delta**.
+
+If you prefer to keep receipts local, the **derived pack alone** is enough to generate a fix order.
