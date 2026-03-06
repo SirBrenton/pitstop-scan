@@ -31,15 +31,23 @@ The goal is not “content.” The goal is **portable, testable reliability lear
 - Related note: `plano-429-failover/README.md`
 - Source: plano issue #697 (retry/failover semantics discussion)
 
+### 3) `wait_misclassified_as_stop`
+**Claim:** Some provider responses appear fatal based on HTTP status alone but are actually **temporary exhaustion conditions**.  
+**Failure mode:** Clients map raw status codes (e.g. `402`) directly to fatal STOP, halting execution even though the condition resolves with time.  
+**Invariant:** If the condition resolves with time, classify as **WAIT**, not **STOP**.
+
+- Proof: `openclaw-402-wait-vs-stop/README.md`
+- Source: openclaw issue #30484 (Anthropic 402 misclassified as billing)
+
 ---
 
 ## Index of proof artifacts
 
 - `archi-cap-vs-429/` — CAP vs COOLDOWN classification; don’t retry size errors
 - `plano-429-failover/` — retry vs failover semantics for HTTP 429; cooldown must gate selection
+- `openclaw-402-wait-vs-stop/` — provider-specific HTTP 402 may indicate WAIT, not fatal billing
 - `svix-2200/` — demo pack v0 (derived hazards/signatures)
 - `demo_pack_v0/` — early example pack (hazards/signatures/report)
-
 ---
 
 ## Template (how new hazards should look)
