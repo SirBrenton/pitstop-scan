@@ -8,6 +8,8 @@ radar → comment → extract invariant → write receipt → codify guardrail �
 
 The goal is not “content.” The goal is **portable, testable reliability learning**.
 
+Conceptual model: `docs/wait-stop-cap.md`
+
 ---
 
 ## Current hazards (proof-backed)
