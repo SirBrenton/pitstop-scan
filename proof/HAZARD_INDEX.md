@@ -1,0 +1,80 @@
+# Pitstop Hazard Index (Proof Pack)
+
+This folder is a growing set of **small, concrete hazard proofs** extracted from real-world issues.
+
+Each proof aims to follow the same loop:
+
+radar → comment → extract invariant → write receipt → codify guardrail → bundle artifact
+
+The goal is not “content.” The goal is **portable, testable reliability learning**.
+
+---
+
+## Current hazards (proof-backed)
+
+### 1) `cap_misclassified_as_cooldown`
+**Claim:** Not all `429` responses are cooldown. Some are **capacity failures** in disguise (TPM/request too large).  
+**Failure mode:** Retry loops treat all `429` as “wait and retry,” causing repeated failures and amplification.  
+**Invariant:** Only retry **COOLDOWN**. CAP must be **shrunk before retry**.
+
+- Proof: `archi-cap-vs-429/README.md`
+- Source: archi issue #497 (context overflow + TPM-based 429 examples)
+
+---
+
+### 2) `cooldown_not_consulted_by_selection`
+**Claim:** “Honoring Retry-After” is insufficient if cooldown is enforced only inside the retry loop.  
+**Failure mode:** Provider selection can keep reselecting a model/provider in cooldown, causing routing thrash.  
+**Invariant:** Cooldown must be consulted by **provider selection eligibility**, not only retry timing.
+
+- Proof: `plano-429-failover/REGRESSION_TEST.md`
+- Related note: `plano-429-failover/README.md`
+- Source: plano issue #697 (retry/failover semantics discussion)
+
+---
+
+## Index of proof artifacts
+
+- `archi-cap-vs-429/` — CAP vs COOLDOWN classification; don’t retry size errors
+- `plano-429-failover/` — retry vs failover semantics for HTTP 429; cooldown must gate selection
+- `svix-2200/` — demo pack v0 (derived hazards/signatures)
+- `demo_pack_v0/` — early example pack (hazards/signatures/report)
+
+---
+
+## Template (how new hazards should look)
+
+A new hazard proof should include:
+
+1) **Name** (stable hazard class id)
+2) **Observed signals** (what shows up in logs/headers)
+3) **Why naive handling fails** (retry storms, thrash, wasted compute)
+4) **Invariant** (one sentence)
+5) **Decision table** (signals → class → action)
+6) **Guardrail** (small preflight or selection rule)
+7) **Minimal test** (the smallest regression that locks it in)
+8) **Source link** (issue / incident / repro)
+
+---
+
+## Naming convention (recommended)
+
+Use short hazard ids that can become tags later:
+
+- `cooldown_not_consulted_by_selection`
+- `cap_misclassified_as_cooldown`
+- `retry_storm_missing_budget_cap`
+- `timeout_deadline_not_propagated`
+- `backoff_without_jitter_herd`
+
+---
+
+## Why this exists
+
+Pitstop isn’t “advice.”
+Pitstop is **evidence + invariants** that reduce retries, tail latency, and failure amplification.
+
+These proofs are meant to be:
+- linkable
+- reviewable
+- expandable into guardrails/tests later
