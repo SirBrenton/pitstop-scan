@@ -5,6 +5,8 @@ A small Pitstop primitive for mapping raw failure signals into **behavioral clas
 The goal is not to preserve every upstream error taxonomy.
 The goal is to answer the execution question:
 
+See also: `docs/wait-stop-cap.md`
+
 > **What should the caller do next?**
 
 ---
