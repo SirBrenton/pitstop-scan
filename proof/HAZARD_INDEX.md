@@ -41,6 +41,131 @@ The goal is not “content.” The goal is **portable, testable reliability lear
 
 ---
 
+## Hazard Families
+
+Many hazards fall into broader reliability families.  
+Grouping them helps identify where reusable guardrails should exist.
+
+### Rate-limit / exhaustion hazards
+
+Temporary exhaustion conditions that should trigger **WAIT** semantics.
+
+- `wait_misclassified_as_stop`
+- `cooldown_not_consulted_by_selection`
+
+These hazards appear when systems misinterpret rate limits, quota windows,
+or cooldown signals.
+
+Typical consequences:
+
+- premature failure
+- routing thrash
+- repeated retries against unavailable providers
+
+---
+
+### Capacity / size hazards
+
+Failures caused by **request size exceeding system limits**.
+
+- `cap_misclassified_as_cooldown`
+
+Typical consequences:
+
+- useless retries
+- retry amplification
+- wasted compute
+
+Correct behavior:
+```text
+CAP → shrink request
+```
+not
+```text
+CAP → retry
+```
+---
+
+### Retry amplification hazards (emerging)
+
+These occur when retry logic exists but lacks proper **bounds or coordination**.
+
+Examples that commonly appear in distributed systems:
+
+- retry without global retry budget
+- backoff without jitter
+- retries ignoring cooldown eligibility
+
+These hazards often lead to **retry storms** under load.
+
+(Some examples are listed here as candidate hazard classes and may be
+documented with proofs later.)
+
+---
+
+## Candidate Guardrails
+
+These hazards suggest a small set of reusable reliability primitives.
+
+Examples:
+
+### `classify_error(...)`
+
+Classifies execution failures into behavioral categories:
+```text
+WAIT
+STOP
+CAP
+UNKNOWN
+```
+Inputs might include:
+
+- HTTP status
+- provider context
+- response headers
+- payload signals
+
+---
+
+### `should_retry(...)`
+
+Determines whether retry is appropriate.
+
+Example rule shape:
+```text
+WAIT → retry with bounded backoff
+CAP → modify request before retry
+STOP → fail immediately
+```
+---
+
+### `eligible_providers(...)`
+
+Ensures routing logic respects cooldown state.
+
+Provider selection should exclude providers currently in cooldown.
+
+```text
+if provider.cooldown_active:
+provider is ineligible
+```
+---
+
+### `preflight_budget_ok(...)`
+
+Prevents capacity failures before execution.
+
+Example:
+```text
+estimated_input_tokens <= model_context_limit - reserved_output_tokens
+```
+---
+
+These guardrails represent **portable reliability controls** that could
+eventually become code primitives.
+
+---
+
 ## Index of proof artifacts
 
 - `archi-cap-vs-429/` — CAP vs COOLDOWN classification; don’t retry size errors
