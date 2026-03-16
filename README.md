@@ -12,6 +12,8 @@ Given execution receipts, Scan produces a ranked hazard pack showing exactly whe
 
 No dashboards. No calls. Just receipts → hazards → guardrails.
 
+**Start here:** [`docs/START_HERE.md`](docs/START_HERE.md)
+
 ---
 
 ## Why you’d run this

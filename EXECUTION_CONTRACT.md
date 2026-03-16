@@ -12,6 +12,8 @@
 
 **Contract version:** `1.0`
 
+A contract violation includes missing, inconsistent, or unsafe receipts; execution is only reliable if every attempt is observable.
+
 ## Compatibility (normative)
 - **v1.x is additive only.** New fields MAY be added; existing fields/semantics MUST NOT change.
 
@@ -301,4 +303,20 @@ Receipts MUST be safe to export as “derived operational metadata.”
 **Attempt 1 (rate-limited → retry):**
 ```json
 {"receipt_id":"r_01","ts_utc":"2026-02-24T03:21:09Z","execution_id":"ex_abc","attempt_id":1,"attempt":{"kind":"primary","prior_attempts":0},"tool_id":"github","operation":"search_issues","endpoint_norm":"GET /search/issues","scope":{"provider_key":"github:cred_h1","credential_key":"cred_h1"},"budget":{"deadline_ms":900,"max_elapsed_ms":1200,"retry_budget":3},"outcome":{"status":"fail","error_class":"rate_limit_429","http_status":429,"retry_after_ms":2000},"cost":{"latency_ms":210},"decision":{"action":"retry","reason_code":"retryable_rate_limit","mode":"enforce"},"evidence":{"rate_limit_type":"primary","classification_confidence":0.9}}
+```
+**Attempt 2 (provider fallback after provider-scope failure):**
+
+```json
+{"receipt_id":"r_02","ts_utc":"2026-02-24T03:21:10Z","execution_id":"ex_fallback","attempt_id":2,"attempt":{"kind":"fallback","prior_attempts":1},"tool_id":"llm_gateway","operation":"chat_completion","endpoint_norm":"POST /v1/chat/completions","provider_id":"openai","model_id":"gpt-5-mini","scope":{"provider_key":"openai:cred_o1","credential_key":"cred_o1"},"budget":{"deadline_ms":900,"max_elapsed_ms":2500,"retry_budget":3},"outcome":{"status":"ok"},"cost":{"latency_ms":480},"decision":{"action":"fallback","reason_code":"provider_scope_failover","mode":"enforce"}}
+```
+**Attempt 3 (cooldown active → preempted before tool call):**
+
+```json
+{"receipt_id":"r_03","ts_utc":"2026-02-24T03:21:10Z","execution_id":"ex_cooldown","attempt_id":1,"attempt":{"kind":"primary","prior_attempts":0},"tool_id":"anthropic","operation":"chat_completion","endpoint_norm":"POST /v1/messages","provider_id":"anthropic","model_id":"claude-sonnet","scope":{"model_key":"anthropic:claude-sonnet:cred_a1","provider_key":"anthropic:cred_a1","credential_key":"cred_a1"},"budget":{"deadline_ms":1000,"max_elapsed_ms":1500,"retry_budget":2},"outcome":{"status":"fail","error_class":"cooldown_active","retry_after_ms":800},"cost":{"latency_ms":0},"decision":{"action":"cooldown","reason_code":"cooldown_key_active","mode":"enforce"}}
+```
+
+**Attempt 4 (policy block → destructive action refused):**
+
+```json
+{"receipt_id":"r_04","ts_utc":"2026-02-24T03:21:11Z","execution_id":"ex_policy","attempt_id":1,"attempt":{"kind":"primary","prior_attempts":0},"tool_id":"shell","operation":"rm","endpoint_norm":"exec:rm","budget":{"deadline_ms":500,"max_elapsed_ms":500,"retry_budget":1},"outcome":{"status":"fail","error_class":"preempted_policy"},"cost":{"latency_ms":0},"decision":{"action":"block","reason_code":"destructive_disallowed","mode":"enforce"}}
 ```
