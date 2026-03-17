@@ -16,6 +16,8 @@ A contract violation includes missing, inconsistent, or unsafe receipts; executi
 
 ## Compatibility (normative)
 - **v1.x is additive only.** New fields MAY be added; existing fields/semantics MUST NOT change.
+- **Forward-compatible receipts:** consumers MUST ignore unknown fields.
+- Breaking changes require **v2.0** plus an explicit migration note.
 
 ## Non-goals (v1)
 
@@ -29,8 +31,6 @@ It is not:
 - A payload logging schema
 
 This is an execution reliability contract.
-- **Forward-compatible receipts:** consumers MUST ignore unknown fields.
-- Breaking changes require **v2.0** plus an explicit migration note.
 
 ---
 
@@ -151,7 +151,7 @@ The receipt MUST contain enough information to:
 - `attempt.kind` MUST be one of: `primary | retry | fallback`.
 - `attempt.prior_attempts` (int) — number of attempts already made before this attempt (0 for first).
 
-### 4.3 target (normalized)
+### 4.3 target fields (normalized)
 - `tool_id` (string) — e.g. `github`, `anthropic`, `openai`, `rpc`
 - `operation` (string) — e.g. `search_issues`, `create_issue`, `chat_completion`
 - `endpoint_norm` (string) — normalized endpoint/class (not raw URL)
@@ -301,14 +301,17 @@ Receipts MUST be safe to export as “derived operational metadata.”
 ## Appendix A) Example receipts (JSONL)
 
 **Attempt 1 (rate-limited → retry):**
+
 ```json
 {"receipt_id":"r_01","ts_utc":"2026-02-24T03:21:09Z","execution_id":"ex_abc","attempt_id":1,"attempt":{"kind":"primary","prior_attempts":0},"tool_id":"github","operation":"search_issues","endpoint_norm":"GET /search/issues","scope":{"provider_key":"github:cred_h1","credential_key":"cred_h1"},"budget":{"deadline_ms":900,"max_elapsed_ms":1200,"retry_budget":3},"outcome":{"status":"fail","error_class":"rate_limit_429","http_status":429,"retry_after_ms":2000},"cost":{"latency_ms":210},"decision":{"action":"retry","reason_code":"retryable_rate_limit","mode":"enforce"},"evidence":{"rate_limit_type":"primary","classification_confidence":0.9}}
 ```
+
 **Attempt 2 (provider fallback after provider-scope failure):**
 
 ```json
 {"receipt_id":"r_02","ts_utc":"2026-02-24T03:21:10Z","execution_id":"ex_fallback","attempt_id":2,"attempt":{"kind":"fallback","prior_attempts":1},"tool_id":"llm_gateway","operation":"chat_completion","endpoint_norm":"POST /v1/chat/completions","provider_id":"openai","model_id":"gpt-5-mini","scope":{"provider_key":"openai:cred_o1","credential_key":"cred_o1"},"budget":{"deadline_ms":900,"max_elapsed_ms":2500,"retry_budget":3},"outcome":{"status":"ok"},"cost":{"latency_ms":480},"decision":{"action":"fallback","reason_code":"provider_scope_failover","mode":"enforce"}}
 ```
+
 **Attempt 3 (cooldown active → preempted before tool call):**
 
 ```json
