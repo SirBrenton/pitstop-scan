@@ -108,6 +108,27 @@ These receipts are the guardrails the scan will often recommend.
 
 ---
 
+## Live 429 Classifier
+
+POST a 429 status + headers, get back WAIT / CAP / STOP + first knob to adjust.
+```bash
+curl -s -X POST https://web-production-273d3.up.railway.app/classify \
+  -H "Content-Type: application/json" \
+  -d '{"status":429,"headers":{"retry-after":"30"},"provider":"anthropic"}'
+```
+
+Three cases:
+
+| Input | Classification | Meaning |
+|-------|---------------|---------|
+| `retry-after: 30` | **WAIT** | Honor header, retry after delay |
+| `retry-after: 600` | **STOP** | Quota exhaustion — do not retry |
+| no header | **CAP** | Reduce concurrency — do not retry immediately |
+
+Send a real 429 blob (status + headers) to **brentondwilliams@gmail.com** and I'll run it through.
+
+---
+
 ## The Execution Contract (v1.0)
 
 Pitstop Scan is a **reference implementation** of the Pitstop Execution Contract:
