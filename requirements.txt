@@ -1,2 +1,2 @@
-# Pitstop Scan MVP
-jsonschema>=4.0.0,<5
+fastapi
+uvicorn
