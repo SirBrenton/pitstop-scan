@@ -47,28 +47,37 @@ Open the report:
 ```bash
 open output/report.md   # macOS
 ```
-#### Option B — You only have raw error logs
-If you don’t have receipts yet, paste raw logs into a file:
-```bash
-pitstop ingest blob.txt
-```
-This will:
-- classify the failure boundary (WAIT vs STOP)
-- normalize into decision_event.v1
-- run Scan automatically
-- generate a ranked hazard pack
+#### Option B — You only have a raw failure blob
 
-Then open:
+If you don’t have receipts yet, you can start from a copied error/log blob:
+
 ```bash
-open output/report.md
+python -m pitstop_scan.cli intake --in blob.txt --out output/intake-pack --run-scan
 ```
+This will produce:
+- raw_scrubbed.txt — scrubbed copy of the input blob
+- artifact.json — normalized boundary classification summary
+- exhaust.jsonl — scan-compatible receipt
+- `summary.md` — human-readable provisional diagnosis
+- derived/ — scan outputs
+
+This is intentionally v1:
+- heuristic signal extraction
+- conservative scrubbing
+- simple provisional classification
+
+Then open the report:
+```bash
+open output/intake-pack/derived/report.md
+```
+
 ### No data yet? Run a demo
 Run a synthetic demo (creates a tiny input/exhaust.jsonl):
 ```bash
 make demo
 open output/report.md
 ```
-If `make demo works`, you’re ready — replace `input/exhaust.jsonl` with your real file and rerun `make run`.
+If `make demo` works, you’re ready — replace `input/exhaust.jsonl` with your real file and rerun `make run`.
 
 ---
 
@@ -85,12 +94,14 @@ Running the scan writes:
 **Breach** = latency exceeds the per-attempt deadline (`budget.deadline_ms`) **even if status is `ok`**.  
 (If receipts use legacy `budget_ms`, Scan treats it as `budget.deadline_ms`.)
 
+If you use `intake`, Scan writes an intermediate pack before generating derived outputs.
+
 ---
 
 ## Proof (sample hazard pack)
 
 See a sample output pack (derived aggregates only):
-- **[proof/demo_pack_v0/report.md](proof/demo_pack_v0/report.md)**
+- [proof/demo_pack_v0/report.md](proof/demo_pack_v0/report.md)
 - [proof/demo_pack_v0/hazards.csv](proof/demo_pack_v0/hazards.csv)
 - [proof/demo_pack_v0/signatures.csv](proof/demo_pack_v0/signatures.csv)
 - [proof/demo_pack_v0/summary.json](proof/demo_pack_v0/summary.json)
@@ -110,7 +121,7 @@ These receipts are the guardrails the scan will often recommend.
 
 ## Live 429 Classifier
 
-POST a 429 status + headers, get back WAIT / CAP / STOP + first knob to adjust.
+POST a 429 status + headers, get back a classification (WAIT / CAP / STOP) + the first knob to adjust.
 ```bash
 curl -s -X POST https://web-production-273d3.up.railway.app/classify \
   -H "Content-Type: application/json" \
@@ -153,11 +164,11 @@ Each JSONL line should include (aligned to the Execution Contract):
 
 **Required:**
 
-- target: `tool_id`, `operation`, `endpoint_norm`
-- outcome: `outcome.status` and (if fail) `outcome.error_class` (optionally `outcome.http_status`)
-- timing: `cost.latency_ms`
-- budget: `budget.deadline_ms` (or `legacy budget_ms`)
-- attempt identity: `execution_id`, `attempt_id`
+- `tool_id`, `operation`, `endpoint_norm`
+- `outcome.status` and (if fail) `outcome.error_class` (optionally `outcome.http_status`)
+- `cost.latency_ms`
+- `budget.deadline_ms` (or legacy `budget_ms`)
+- `execution_id`, `attempt_id`
 
 **Recommended (improves ranking + fix guidance):**
 
@@ -185,6 +196,8 @@ Receipts **MUST NOT** include:
 - raw URLs or query strings (use `endpoint_norm`)
 
 Outputs are **derived summaries only** (no raw requests/responses).
+
+Raw intake blobs may temporarily contain headers or error text; intake output is scrubbed before generating scan-ready receipts.
 
 ---
 
