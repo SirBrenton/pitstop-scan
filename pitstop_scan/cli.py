@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .intake import run_intake
 from .scan import run_scan
 
 
@@ -15,6 +16,13 @@ def _scan_cmd(in_path: Path, out_dir: Path) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     run_scan(in_path=in_path, out_dir=out_dir)
     return 0
+
+
+def _intake_cmd(in_path: Path, out_dir: Path, run_scan_after: bool) -> int:
+    if not in_path.exists():
+        print(f"ERROR: missing input file: {in_path}")
+        return 2
+    return run_intake(in_path=in_path, out_dir=out_dir, run_scan_after=run_scan_after)
 
 
 def _validate_cmd(in_path: Path, schema_path: Path) -> int:
@@ -83,15 +91,29 @@ def main() -> int:
       python -m pitstop_scan.cli --in <jsonl> --out <dir>
     New:
       python -m pitstop_scan.cli scan --in <jsonl> --out <dir>
+      python -m pitstop_scan.cli intake --in <raw_blob> --out <dir> [--run-scan]
       python -m pitstop_scan.cli validate --in <jsonl> --schema <schema.json>
     """
     ap = argparse.ArgumentParser(description="Pitstop Scan CLI")
     sub = ap.add_subparsers(dest="cmd")
 
-    # Explicit scan subcommand (optional sugar)
+    # Explicit scan subcommand
     ap_scan = sub.add_parser("scan", help="Run scan on an exhaust JSONL file")
     ap_scan.add_argument("--in", dest="in_path", required=True, help="Path to exhaust.jsonl")
     ap_scan.add_argument("--out", dest="out_dir", required=True, help="Output directory")
+
+    # Intake subcommand
+    ap_intake = sub.add_parser(
+        "intake",
+        help="Convert a raw failure blob into a scan-ready artifact pack",
+    )
+    ap_intake.add_argument("--in", dest="in_path", required=True, help="Path to raw text/json/log input")
+    ap_intake.add_argument("--out", dest="out_dir", required=True, help="Output directory for artifact pack")
+    ap_intake.add_argument(
+        "--run-scan",
+        action="store_true",
+        help="Run scan after generating the artifact pack",
+    )
 
     # Validate subcommand
     ap_val = sub.add_parser("validate", help="Validate JSONL against a JSON Schema file")
@@ -113,6 +135,9 @@ def main() -> int:
 
     if args.cmd == "scan":
         return _scan_cmd(Path(args.in_path), Path(args.out_dir))
+
+    if args.cmd == "intake":
+        return _intake_cmd(Path(args.in_path), Path(args.out_dir), args.run_scan)
 
     if args.cmd == "validate":
         return _validate_cmd(Path(args.in_path), Path(args.schema_path))
