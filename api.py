@@ -62,11 +62,20 @@ class LegacyClassification(BaseModel):
     first_knob: str
 
 
+class NextStep(BaseModel):
+    message: str
+    contact: str
+    offer: str
+
 class ClassifyResponse(BaseModel):
     classification: Classification
     legacy: LegacyClassification
     corpus_reference: Optional[str] = None
-
+    next_step: NextStep = NextStep(
+        message="Want to know where else this pattern appears in your codebase?",
+        contact="brent@pitstop.dev",
+        offer="Send your repo URL for a free scan"
+    )
 
 def build_response(
     *,
